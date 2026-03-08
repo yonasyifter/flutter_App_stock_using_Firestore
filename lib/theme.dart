@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const cream = Color(0xFFF5F0E8);
@@ -13,11 +14,43 @@ class AppTheme {
   static const paper = Color(0xFFFBF8F2);
   static const rule = Color(0xFFD8CEBF);
 
+  // ── Amharic / Ethiopic font helpers ─────────────
+  // Noto Serif Ethiopic  → headings, brand, display text
+  // Noto Sans Ethiopic   → body, labels, inputs, everything else
+
+  static TextStyle serifAmharic({
+    double fontSize = 16,
+    FontWeight fontWeight = FontWeight.w700,
+    Color color = ink,
+    double? letterSpacing,
+    double? height,
+  }) =>
+      GoogleFonts.notoSerifEthiopic(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: letterSpacing,
+        height: height,
+      );
+
+  static TextStyle sansAmharic({
+    double fontSize = 14,
+    FontWeight fontWeight = FontWeight.w400,
+    Color color = ink,
+    FontStyle fontStyle = FontStyle.normal,
+    double? letterSpacing,
+  }) =>
+      GoogleFonts.notoSansEthiopic(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        fontStyle: fontStyle,
+        letterSpacing: letterSpacing,
+      );
+
   static ThemeData get theme {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'NotoEthiopic', // Global Amharic font
-
       scaffoldBackgroundColor: cream,
       colorScheme: const ColorScheme.light(
         primary: ink,
@@ -25,59 +58,18 @@ class AppTheme {
         surface: paper,
         error: red,
       ),
-
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          fontSize: 38,
-          fontWeight: FontWeight.w900,
-          color: ink,
-          letterSpacing: 0,
-          height: 1.2,
-        ),
-        displayMedium: TextStyle(
-          fontSize: 30,
-          fontWeight: FontWeight.w700,
-          color: ink,
-          letterSpacing: 0,
-          height: 1.2,
-        ),
-        displaySmall: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          color: ink,
-          height: 1.3,
-        ),
-        headlineMedium: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: ink,
-          height: 1.3,
-        ),
-        titleLarge: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: ink,
-          height: 1.4,
-        ),
-        bodyLarge: TextStyle(
-          fontSize: 16, // Increased for readability
-          color: ink,
-          height: 1.5,
-        ),
-        bodyMedium: TextStyle(
-          fontSize: 14, // Increased for readability
-          color: brown,
-          height: 1.5,
-        ),
-        labelSmall: TextStyle(
-          fontSize: 12,
-          color: brown,
-          letterSpacing: 0,
-          fontWeight: FontWeight.w500,
-          height: 1.4,
-        ),
+      textTheme: TextTheme(
+        // Serif for display / headings
+        displayLarge: serifAmharic(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1),
+        displayMedium: serifAmharic(fontSize: 28, fontWeight: FontWeight.w700),
+        displaySmall: serifAmharic(fontSize: 22, fontWeight: FontWeight.w700),
+        headlineMedium: serifAmharic(fontSize: 18, fontWeight: FontWeight.w700),
+        // Sans for body
+        titleLarge: sansAmharic(fontSize: 16, fontWeight: FontWeight.w600),
+        bodyLarge: sansAmharic(fontSize: 15),
+        bodyMedium: sansAmharic(fontSize: 13, color: brown),
+        labelSmall: sansAmharic(fontSize: 11, color: brown, letterSpacing: 0.5),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
@@ -93,48 +85,35 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: amber, width: 2),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        labelStyle: const TextStyle(
-          fontSize: 13,
-          color: brown,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        labelStyle: sansAmharic(fontSize: 12, color: brown),
       ),
-
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: ink,
           foregroundColor: cream,
-          minimumSize: const Size(double.infinity, 54),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'NotoEthiopic',
-          ),
+          minimumSize: const Size(double.infinity, 50),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: sansAmharic(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
-
-      appBarTheme: const AppBarTheme(
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: ink,
+          minimumSize: const Size(double.infinity, 50),
+          side: const BorderSide(color: rule),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: sansAmharic(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+      ),
+      appBarTheme: AppBarTheme(
         backgroundColor: ink,
         foregroundColor: cream,
         elevation: 0,
-        titleTextStyle: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          color: cream,
-          fontFamily: 'NotoEthiopic',
-        ),
-        iconTheme: IconThemeData(color: amberLight),
+        titleTextStyle: serifAmharic(fontSize: 20, fontWeight: FontWeight.w700, color: cream),
+        iconTheme: const IconThemeData(color: amberLight),
       ),
-      
-      dividerTheme: const DividerThemeData(
-        color: rule,
-        thickness: 1,
-      ),
-
+      dividerTheme: const DividerThemeData(color: rule, thickness: 1),
       cardTheme: CardThemeData(
         color: paper,
         elevation: 0,
@@ -148,6 +127,4 @@ class AppTheme {
   }
 }
 
-// Updated currency for Ethiopia (Birr)
-String formatCurrency(double amount) =>
-    '${amount.toStringAsFixed(2)} ብር';
+String formatCurrency(double amount) => 'ብር ${amount.toStringAsFixed(2)}';

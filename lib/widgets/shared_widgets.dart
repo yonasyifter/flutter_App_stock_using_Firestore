@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme.dart';
 
-// ─── Step progress indicator ─────────────────────────
 class StepIndicator extends StatelessWidget {
   final int currentStep;
   final int totalSteps;
-
   const StepIndicator({super.key, required this.currentStep, required this.totalSteps});
 
   @override
@@ -24,10 +22,7 @@ class StepIndicator extends StatelessWidget {
             child: Container(
               height: 4,
               margin: EdgeInsets.only(right: i < totalSteps - 1 ? 6 : 0),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
             ),
           );
         }),
@@ -36,150 +31,63 @@ class StepIndicator extends StatelessWidget {
   }
 }
 
-// ─── Section Label ───────────────────────────────────
 class SectionLabel extends StatelessWidget {
   final String text;
   const SectionLabel(this.text, {super.key});
-
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 8),
-      child: Text(
-        text.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 11, color: AppTheme.brown,
-          letterSpacing: 1, fontWeight: FontWeight.w500,
-          fontFamily: 'NotoEthiopic',
-        ),
-      ),
+      child: Text(text, style: AppTheme.sansAmharic(fontSize: 11, color: AppTheme.brown, letterSpacing: 0.5)),
     );
   }
 }
 
-// ─── Screen Header ───────────────────────────────────
 class ScreenHeader extends StatelessWidget {
   final String title;
   final String subtitle;
-
   const ScreenHeader({super.key, required this.title, required this.subtitle});
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.displaySmall),
+        Text(title, style: AppTheme.serifAmharic(fontSize: 24, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text(subtitle, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic)),
+        Text(subtitle, style: AppTheme.sansAmharic(fontSize: 13, color: AppTheme.brown, fontStyle: FontStyle.italic)),
         const SizedBox(height: 20),
       ],
     );
   }
 }
 
-// ─── Numeric input tile ──────────────────────────────
-class NumericTile extends StatelessWidget {
-  final String label;
-  final String subLabel;
-  final int value;
-  final ValueChanged<int> onChanged;
-  final int min;
-  final int? max;
-
-  const NumericTile({
-    super.key,
-    required this.label,
-    required this.subLabel,
-    required this.value,
-    required this.onChanged,
-    this.min = 0,
-    this.max,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = TextEditingController(text: value.toString());
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 2),
-                  Text(subLabel, style: Theme.of(context).textTheme.bodyMedium),
-                ],
-              ),
-            ),
-            SizedBox(
-              width: 70,
-              child: TextFormField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: const TextStyle(fontSize: 18, color: AppTheme.ink, fontFamily: 'NotoEthiopic'),
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
-                  isDense: true,
-                ),
-                onChanged: (v) {
-                  int parsed = int.tryParse(v) ?? min;
-                  if (max != null && parsed > max!) parsed = max!;
-                  if (parsed < min) parsed = min;
-                  onChanged(parsed);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Currency input field ────────────────────────────
 class CurrencyField extends StatelessWidget {
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
-
   const CurrencyField({super.key, required this.label, required this.value, required this.onChanged});
-
   @override
   Widget build(BuildContext context) {
     final controller = TextEditingController(text: value.toStringAsFixed(2));
     return TextFormField(
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: const TextStyle(fontSize: 15, color: AppTheme.ink, fontFamily: 'NotoEthiopic'),
+      style: AppTheme.sansAmharic(fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
         prefixText: 'ብር ',
-        prefixStyle: const TextStyle(color: AppTheme.brown, fontFamily: 'NotoEthiopic'),
+        prefixStyle: AppTheme.sansAmharic(color: AppTheme.brown, fontSize: 14),
       ),
       onChanged: (v) => onChanged(double.tryParse(v) ?? value),
     );
   }
 }
 
-// ─── Bottom primary button ───────────────────────────
 class BottomActionBar extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
   final Color? color;
-
-  const BottomActionBar({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.color,
-  });
-
+  const BottomActionBar({super.key, required this.label, required this.onPressed, this.color});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -193,6 +101,7 @@ class BottomActionBar extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: color ?? AppTheme.ink,
           foregroundColor: AppTheme.cream,
+          textStyle: AppTheme.sansAmharic(fontSize: 15, fontWeight: FontWeight.w600),
         ),
         child: Text(label),
       ),
@@ -200,11 +109,9 @@ class BottomActionBar extends StatelessWidget {
   }
 }
 
-// ─── Warning chip ────────────────────────────────────
 class WarningChip extends StatelessWidget {
   final String text;
   const WarningChip(this.text, {super.key});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -220,21 +127,18 @@ class WarningChip extends StatelessWidget {
         children: [
           const Text('⚠️', style: TextStyle(fontSize: 14)),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 13, color: AppTheme.red, fontFamily: 'NotoEthiopic')),
+          Text(text, style: AppTheme.sansAmharic(fontSize: 13, color: AppTheme.red)),
         ],
       ),
     );
   }
 }
 
-// ─── Stat card (for summary/monthly) ─────────────────
 class StatCard extends StatelessWidget {
   final String label;
   final String value;
   final bool dark;
-
   const StatCard({super.key, required this.label, required this.value, this.dark = false});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -247,26 +151,38 @@ class StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10, letterSpacing: 1,
-              color: dark ? AppTheme.amberLight : AppTheme.brown,
-              fontWeight: FontWeight.w500,
-              fontFamily: 'NotoEthiopic',
-            ),
-          ),
+          Text(label, style: AppTheme.sansAmharic(fontSize: 11, color: dark ? AppTheme.amberLight : AppTheme.brown, letterSpacing: 0.5)),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22, fontWeight: FontWeight.w700,
-              color: dark ? AppTheme.cream : AppTheme.ink,
-              fontFamily: 'NotoEthiopic',
-            ),
-          ),
+          Text(value, style: AppTheme.serifAmharic(fontSize: 20, fontWeight: FontWeight.w700, color: dark ? AppTheme.cream : AppTheme.ink)),
         ],
       ),
     );
   }
+}
+
+class QtyField extends StatefulWidget {
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+  const QtyField({super.key, required this.label, required this.value, required this.onChanged});
+  @override
+  State<QtyField> createState() => _QtyFieldState();
+}
+class _QtyFieldState extends State<QtyField> {
+  late TextEditingController _ctrl;
+  @override
+  void initState() { super.initState(); _ctrl = TextEditingController(text: widget.value.toString()); }
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _ctrl,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      style: AppTheme.sansAmharic(fontSize: 15),
+      decoration: InputDecoration(labelText: widget.label),
+      onChanged: (v) => widget.onChanged(int.tryParse(v) ?? 0),
+    );
+  }
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 }

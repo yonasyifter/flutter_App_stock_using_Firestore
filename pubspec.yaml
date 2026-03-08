@@ -1,7 +1,7 @@
 name: stockbook
-description: A grocery stock and sales management app.
+description: የሸቀጥ አስተዳደር መተግበሪያ - Grocery stock management app.
 publish_to: 'none'
-version: 1.0.0+1
+version: 3.0.0+5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -11,12 +11,16 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  sqflite: ^2.3.0
-  path: ^1.8.3
+  # ── Firebase ─────────────────────────────────────
+  firebase_core: ^3.1.0
+  firebase_auth: ^5.1.0        # Authentication (login/signup/reset)
+  cloud_firestore: ^5.1.0      # Database (per-user scoped data)
+  # ── State & UI ───────────────────────────────────
   provider: ^6.1.1
   table_calendar: ^3.1.2
   intl: ^0.20.2
-  google_fonts: ^6.1.0
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
@@ -25,7 +29,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  fonts:
-    - family: NotoEthiopic
-      fonts:
-        - asset: lib/assets/fonts/NotoSansEthiopic-Regular.ttf

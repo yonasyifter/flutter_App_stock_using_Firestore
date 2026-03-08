@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/product.dart';
 import '../providers/app_provider.dart';
+import '../providers/language_provider.dart';
 import '../theme.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -13,18 +13,29 @@ class ProductSetupScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ግሮሰሪ አቃዎች'),
+        title: Consumer<LanguageProvider>(
+          builder: (_, lang, __) => Text(lang.s.products,
+              style: AppTheme.serifAmharic(fontSize: 20, color: AppTheme.cream)),
+        ),
         actions: [
-          TextButton.icon(
-            onPressed: () => _showAddProduct(context),
-            icon: const Icon(Icons.add, color: AppTheme.amberLight),
-            label: Text('ተጨማሪ', style: GoogleFonts.dmSans(color: AppTheme.amberLight, fontWeight: FontWeight.w600)),
+          Consumer<LanguageProvider>(
+            builder: (ctx, lang, __) => TextButton.icon(
+              onPressed: () => _showAddProduct(ctx),
+              icon: const Icon(Icons.add, color: AppTheme.amberLight),
+              label: Text(lang.s.add,
+                  style: AppTheme.sansAmharic(
+                      color: AppTheme.amberLight,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+            ),
           ),
         ],
       ),
-      body: Consumer<AppProvider>(
-        builder: (context, provider, _) {
+      body: Consumer2<AppProvider, LanguageProvider>(
+        builder: (context, provider, lang, _) {
+          final s = lang.s;
           final active = provider.products.where((p) => p.active).toList();
+
           if (active.isEmpty) {
             return Center(
               child: Padding(
@@ -32,22 +43,26 @@ class ProductSetupScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('ግሮሰሪ ውስጥ አቃ የለም🛒', style: TextStyle(fontSize: 48)),
+                    const Text('🛒', style: TextStyle(fontSize: 48)),
                     const SizedBox(height: 16),
-                    Text(
-                      '',
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
+                    Text(s.noProducts,
+                        style: AppTheme.serifAmharic(
+                            fontSize: 22, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    Text(
-                      'ከላይ ያለውን የምልክት በመጫን የመጀመሪያዎን አቃ ያስገቡ።.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-                    ),
+                    Text(s.noProductsSub,
+                        textAlign: TextAlign.center,
+                        style: AppTheme.sansAmharic(
+                            fontSize: 13,
+                            color: AppTheme.brown,
+                            fontStyle: FontStyle.italic)),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () => _showAddProduct(context),
-                      child: const Text('የመጀመርያ አቃ ኣስገባ/ቢ'),
+                      child: Text(s.addFirstProduct,
+                          style: AppTheme.sansAmharic(
+                              fontSize: 15,
+                              color: AppTheme.cream,
+                              fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -58,10 +73,7 @@ class ProductSetupScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const ScreenHeader(
-                title: 'የግሮሰሪ ዝርዝር አቃዎች',
-                subtitle: 'የግሮሰሪ እቃ ብዛት፣ የመግዛት እና የመሸጥ ዋጋዎችን ያስተዳድሩ።',
-              ),
+              ScreenHeader(title: s.productList, subtitle: s.productListSub),
               ...active.map((p) => _ProductTile(product: p)),
             ],
           );
@@ -76,20 +88,22 @@ class ProductSetupScreen extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: AppTheme.paper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _AddProductSheet(existing: existing),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _AddProductSheet(existing: existing, parentContext: context),
     );
   }
 }
 
+// ── Product tile ──────────────────────────────────────
 class _ProductTile extends StatelessWidget {
   final Product product;
-
   const _ProductTile({required this.product});
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
+    final s = lang.s;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -99,21 +113,29 @@ class _ProductTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.name, style: Theme.of(context).textTheme.titleLarge),
+                  Text(product.name,
+                      style: AppTheme.sansAmharic(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   Text(
-                    'መግዛት: ${formatCurrency(product.buyPrice)}  ·  መሸጥ: ${formatCurrency(product.sellPrice)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    '${s.buy}: ${formatCurrency(product.buyPrice)}  ·  '
+                    '${s.sell}: ${formatCurrency(product.sellPrice)}',
+                    style:
+                        AppTheme.sansAmharic(fontSize: 12, color: AppTheme.brown),
                   ),
                   Text(
-                    'መነሻ ብዛት: ${product.openingStock} ፍሬ',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    s.openingStockLabel(product.openingStock),
+                    style:
+                        AppTheme.sansAmharic(fontSize: 12, color: AppTheme.brown),
                   ),
                 ],
               ),
             ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: AppTheme.brown),
+              color: AppTheme.paper,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               onSelected: (val) {
                 if (val == 'edit') {
                   showModalBottomSheet(
@@ -121,25 +143,43 @@ class _ProductTile extends StatelessWidget {
                     isScrollControlled: true,
                     backgroundColor: AppTheme.paper,
                     shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20))),
+                    // Pass outer context so _AddProductSheet can read providers
+                    builder: (sheetCtx) => _AddProductSheet(
+                      existing: product,
+                      parentContext: context,
                     ),
-                    builder: (_) => _AddProductSheet(existing: product),
                   );
                 } else if (val == 'deactivate') {
                   showDialog(
                     context: context,
                     builder: (ctx) => AlertDialog(
                       backgroundColor: AppTheme.paper,
-                      title: Text('አቁም?', style: Theme.of(context).textTheme.displaySmall),
-                      content: const Text('ይህ ምርት ከዕለታዊ ዝርዝር ይደበቃል። ታሪኩ ግን ይቀመጣል/ ኣይተፋም።'),
+                      title: Text(s.deactivateTitle,
+                          style: AppTheme.serifAmharic(
+                              fontSize: 20, fontWeight: FontWeight.w700)),
+                      content: Text(s.deactivateBody,
+                          style: AppTheme.sansAmharic(
+                              fontSize: 14, color: AppTheme.brown)),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ይቅር')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(s.cancel,
+                              style: AppTheme.sansAmharic(
+                                  fontSize: 14, color: AppTheme.brown)),
+                        ),
                         TextButton(
                           onPressed: () {
-                            context.read<AppProvider>().deactivateProduct(product.id!);
+                            // Use firestoreId — the Firebase document ID
+                            context
+                                .read<AppProvider>()
+                                .deactivateProduct(product.firestoreId!);
                             Navigator.pop(ctx);
                           },
-                          child: Text('ይቅር', style: TextStyle(color: AppTheme.red)),
+                          child: Text(s.deactivate,
+                              style: AppTheme.sansAmharic(
+                                  fontSize: 14, color: AppTheme.red)),
                         ),
                       ],
                     ),
@@ -147,8 +187,15 @@ class _ProductTile extends StatelessWidget {
                 }
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('አርትዕ')),
-                const PopupMenuItem(value: 'deactivate', child: Text('ይቅር')),
+                PopupMenuItem(
+                    value: 'edit',
+                    child: Text(s.edit,
+                        style: AppTheme.sansAmharic(fontSize: 14))),
+                PopupMenuItem(
+                    value: 'deactivate',
+                    child: Text(s.deactivate,
+                        style: AppTheme.sansAmharic(
+                            fontSize: 14, color: AppTheme.red))),
               ],
             ),
           ],
@@ -158,9 +205,11 @@ class _ProductTile extends StatelessWidget {
   }
 }
 
+// ── Add / Edit product sheet ──────────────────────────
 class _AddProductSheet extends StatefulWidget {
   final Product? existing;
-  const _AddProductSheet({this.existing});
+  final BuildContext parentContext; // outer context that has Provider
+  const _AddProductSheet({this.existing, required this.parentContext});
 
   @override
   State<_AddProductSheet> createState() => _AddProductSheetState();
@@ -174,74 +223,105 @@ class _AddProductSheetState extends State<_AddProductSheet> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
-    _buyCtrl = TextEditingController(text: widget.existing?.buyPrice.toStringAsFixed(2) ?? '');
-    _sellCtrl = TextEditingController(text: widget.existing?.sellPrice.toStringAsFixed(2) ?? '');
-    _stockCtrl = TextEditingController(text: (widget.existing?.openingStock ?? 0).toString());
+    _buyCtrl = TextEditingController(
+        text: widget.existing?.buyPrice.toStringAsFixed(2) ?? '');
+    _sellCtrl = TextEditingController(
+        text: widget.existing?.sellPrice.toStringAsFixed(2) ?? '');
+    _stockCtrl = TextEditingController(
+        text: (widget.existing?.openingStock ?? 0).toString());
   }
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
+    final s = lang.s;
     final isEditing = widget.existing != null;
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(24, 28, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      padding: EdgeInsets.fromLTRB(
+          24, 28, 24, MediaQuery.of(context).viewInsets.bottom + 24),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              isEditing ? 'Edit (የገባ አቃ ኣስተካክል)' : 'ኣዲስ አቃ ኣስገባ',
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
+            Text(isEditing ? s.editProduct : s.addProduct,
+                style: AppTheme.serifAmharic(
+                    fontSize: 22, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            Text(
-              'የእቃው መረጃ እና ዋጋ ያስገቡ።',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
-            ),
+            Text(s.productDetails,
+                style: AppTheme.sansAmharic(
+                    fontSize: 13,
+                    color: AppTheme.brown,
+                    fontStyle: FontStyle.italic)),
             const SizedBox(height: 20),
+
+            // Name
             TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'የእቃ ስም'),
-              validator: (v) => (v == null || v.isEmpty) ? 'ያስፈልጋል' : null,
+              style: AppTheme.sansAmharic(fontSize: 15),
+              decoration: InputDecoration(labelText: s.productName),
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? s.required : null,
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _buyCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'የመግዛት ዋጋ (ብር)', prefixText: 'ብር '),
-                    validator: (v) => double.tryParse(v ?? '') == null ? 'ስህተት' : null,
-                  ),
+
+            // Buy / Sell prices side by side
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _buyCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: AppTheme.sansAmharic(fontSize: 15),
+                  decoration:
+                      InputDecoration(labelText: s.buyPrice, prefixText: 'ብር '),
+                  validator: (v) =>
+                      double.tryParse(v ?? '') == null ? s.invalid : null,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _sellCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'የመሸጥ ዋጋ (ብር)', prefixText: 'ብር'),
-                    validator: (v) => double.tryParse(v ?? '') == null ? 'ስህተት' : null,
-                  ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _sellCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: AppTheme.sansAmharic(fontSize: 15),
+                  decoration:
+                      InputDecoration(labelText: s.sellPrice, prefixText: 'ብር '),
+                  validator: (v) =>
+                      double.tryParse(v ?? '') == null ? s.invalid : null,
                 ),
-              ],
-            ),
+              ),
+            ]),
             const SizedBox(height: 12),
+
+            // Opening stock
             TextFormField(
               controller: _stockCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'መነሻ ብዛት (እቃ)'),
+              style: AppTheme.sansAmharic(fontSize: 15),
+              decoration:
+                  InputDecoration(labelText: s.openingStockUnits),
             ),
             const SizedBox(height: 20),
+
+            // Save button
             ElevatedButton(
               onPressed: _save,
-              child: Text(isEditing ? 'Save (ለውጦችን አስቀምጥ)' : 'እቃ ጨምር'),
+              child: Text(
+                  isEditing ? s.saveChanges : s.addProduct,
+                  style: AppTheme.sansAmharic(
+                      fontSize: 15,
+                      color: AppTheme.cream,
+                      fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel (ይቅር)'),
+              child: Text(s.cancel,
+                  style: AppTheme.sansAmharic(fontSize: 15, color: AppTheme.ink)),
             ),
           ],
         ),
@@ -251,9 +331,11 @@ class _AddProductSheetState extends State<_AddProductSheet> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
-    final provider = context.read<AppProvider>();
+    // Use parentContext — the sheet's own context is a new route and
+    // cannot find Provider ancestors above the MaterialApp
+    final provider = widget.parentContext.read<AppProvider>();
     final product = Product(
-      id: widget.existing?.id,
+      firestoreId: widget.existing?.firestoreId, // null = new product
       name: _nameCtrl.text.trim(),
       buyPrice: double.parse(_buyCtrl.text),
       sellPrice: double.parse(_sellCtrl.text),
@@ -269,8 +351,10 @@ class _AddProductSheetState extends State<_AddProductSheet> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _buyCtrl.dispose();
-    _sellCtrl.dispose(); _stockCtrl.dispose();
+    _nameCtrl.dispose();
+    _buyCtrl.dispose();
+    _sellCtrl.dispose();
+    _stockCtrl.dispose();
     super.dispose();
   }
 }
