@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
@@ -47,15 +48,16 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                Lottie.asset('lib/assets/lotties/bg.json', width: 100, height: 100),
                 // ── Brand ──────────────────────────────────────
                 const SizedBox(height: 24),
                 Row(children: [
-                  Text('ስቶክ',
+                  Text('   Smon',
                       style: AppTheme.serifAmharic(
                           fontSize: 36, fontWeight: FontWeight.w900, color: AppTheme.ink)),
-                  Text('ቡክ',
+                  Text('Grocery',
                       style: AppTheme.serifAmharic(
                           fontSize: 36, fontWeight: FontWeight.w900, color: AppTheme.amber)),
                 ]),
@@ -67,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: AppTheme.sansAmharic(fontSize: 14, color: AppTheme.brown),
                 ),
 
-                const SizedBox(height: 48),
+                const SizedBox(height: 38),
 
                 // ── Error banner ────────────────────────────────
                 if (auth.errorMessage != null) ...[
@@ -79,18 +81,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
 
                 // ── Email ────────────────────────────────────────
-                Text(lang.isAmharic ? 'ኢሜይል' : 'Email',
-                    style: AppTheme.sansAmharic(
-                        fontSize: 12, color: AppTheme.brown, letterSpacing: 0.5)),
-                const SizedBox(height: 6),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   style: AppTheme.sansAmharic(fontSize: 15),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: 'you@email.com',
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.brown, size: 20),
+                    prefixIcon: Icon(Icons.email_outlined, color: AppTheme.brown, size: 20),
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {
@@ -106,10 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20),
 
                 // ── Password ─────────────────────────────────────
-                Text(lang.isAmharic ? 'የይለፍ ቃል' : 'Password',
-                    style: AppTheme.sansAmharic(
-                        fontSize: 12, color: AppTheme.brown, letterSpacing: 0.5)),
-                const SizedBox(height: 6),
+
                 TextFormField(
                   controller: _passCtrl,
                   obscureText: _obscurePassword,

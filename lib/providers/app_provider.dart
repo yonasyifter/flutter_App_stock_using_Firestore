@@ -6,7 +6,8 @@ import '../services/db_service.dart';
 
 class AppProvider extends ChangeNotifier {
   List<Product> _products = [];
-  List<DayEntry> _monthEntries = [];
+  List<DayEntry> _monthEntries = [];        // light-weight (no sub-tables)
+  List<DayEntry> _fullMonthEntries = [];    // full (with sub-tables, for home screen)
   DayEntry? _currentEntry;
   DateTime _focusedMonth = DateTime.now();
 
@@ -16,6 +17,9 @@ class AppProvider extends ChangeNotifier {
   Map<String, double> _pendingSellPrice = {};
   Map<String, int> _pendingSalesQty = {};
   List<HouseholdExpense> _pendingExpenses = [];
+
+  // Closing stock cache for product setup screen
+  Map<String, int> _closingStockCache = {};
 
   // ── Getters ──────────────────────────────────────────────────────────────
   List<Product> get products => _products;
@@ -43,7 +47,9 @@ class AppProvider extends ChangeNotifier {
     final dateStr = _dateStr(date);
     return _products.any((p) => p.active && p.visibleOnDay(dateStr));
   }
+
   List<DayEntry> get monthEntries => _monthEntries;
+  List<DayEntry> get fullMonthEntries => _fullMonthEntries;
   DayEntry? get currentEntry => _currentEntry;
   DateTime get focusedMonth => _focusedMonth;
 
@@ -54,7 +60,7 @@ class AppProvider extends ChangeNotifier {
   List<HouseholdExpense> get pendingExpenses =>
       List.unmodifiable(_pendingExpenses);
 
-  // ── Products ─────────────────────────────────────────────────────────────
+  // ── Products ──────────────────────────────────────────────────────────────
 
   Future<void> loadProducts() async {
     _products = await FirestoreService.getProducts();
@@ -70,29 +76,28 @@ class AppProvider extends ChangeNotifier {
   Future<void> updateProduct(Product p) async {
     await FirestoreService.updateProduct(p);
 
-    // Patch today's day entry so the purchase screen shows the updated
-    // opening stock immediately — regardless of whether the day is
-    // currently open in the flow or not.
-    final todayStr = _dateStr(DateTime.now());
-    await FirestoreService.patchDayOpeningStock(
-      todayStr,
-      p.firestoreId!,
-      p.openingStock,
-    );
+    // Patch the currently open day's opening stock (not necessarily today)
+    // so getOpeningStock() / getClosingStock() return correct values immediately.
+    if (_currentEntry != null) {
+      final openDayStr = _currentEntry!.dateKey;
 
-    // Also update the in-memory current entry if today is open,
-    // so getOpeningStock() and getClosingStock() return correct values
-    // immediately without needing to reload from Firestore.
-    if (_currentEntry != null && _currentEntry!.dateKey == todayStr) {
-      // Update opening stock
-      final updatedOpening = Map<String, int>.from(_currentEntry!.openingStock);
+      await FirestoreService.patchDayOpeningStock(
+        openDayStr,
+        p.firestoreId!,
+        p.openingStock,
+      );
+
+      // Also update the in-memory current entry so the UI refreshes instantly.
+      final updatedOpening =
+          Map<String, int>.from(_currentEntry!.openingStock);
       updatedOpening[p.firestoreId!] = p.openingStock;
 
       // Recompute closing stock in memory:
-      // closing = corrected opening + purchased today - sold today
+      // closing = corrected opening + purchased - sold
       final purchased = _pendingPurchaseQty[p.firestoreId] ?? 0;
-      final sold      = _pendingSalesQty[p.firestoreId] ?? 0;
-      final updatedClosing = Map<String, int>.from(_currentEntry!.closingStock);
+      final sold = _pendingSalesQty[p.firestoreId] ?? 0;
+      final updatedClosing =
+          Map<String, int>.from(_currentEntry!.closingStock);
       updatedClosing[p.firestoreId!] =
           (p.openingStock + purchased - sold).clamp(0, 99999);
 
@@ -114,12 +119,43 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Closing stock cache (for product setup screen) ────────────────────────
+
+  /// Load closing stock for all active products.
+  /// Call this when entering the product setup screen.
+  Future<void> loadClosingStockCache() async {
+    _closingStockCache = {};
+    for (final p in activeProducts) {
+      _closingStockCache[p.firestoreId!] =
+          await FirestoreService.getCurrentClosingStock(p.firestoreId!);
+    }
+    notifyListeners();
+  }
+
+  /// Returns current stock for a product from the cache,
+  /// falling back to base opening stock if no history exists.
+  int getProductCurrentStock(String firestoreId) {
+    final cached = _closingStockCache[firestoreId];
+    if (cached == null || cached == -1) {
+      final product = _products.firstWhere(
+        (p) => p.firestoreId == firestoreId,
+        orElse: () => Product(name: '', buyPrice: 0, sellPrice: 0),
+      );
+      return product.openingStock;
+    }
+    return cached;
+  }
+
   // ── Month / Calendar ──────────────────────────────────────────────────────
 
   Future<void> loadMonthEntries(DateTime month) async {
     _focusedMonth = month;
+    // Light-weight entries for calendar + monthly totals
     _monthEntries =
         await FirestoreService.getMonthEntries(month.year, month.month);
+    // Full entries (with sub-tables) for home screen daily summary
+    _fullMonthEntries =
+        await FirestoreService.getFullMonthEntries(month.year, month.month);
     notifyListeners();
   }
 
@@ -133,13 +169,22 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Get the full hydrated entry for a specific day (for home screen daily summary).
+  DayEntry? getFullEntryForDay(int day) {
+    try {
+      return _fullMonthEntries.firstWhere(
+        (e) => e.date.day == day && e.date.month == _focusedMonth.month,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Open a day ────────────────────────────────────────────────────────────
 
   Future<void> openDay(DateTime date) async {
     await loadProducts();
 
-    // Load or create the day entry.
-    // Works for new days, in-progress days, AND completed days (re-editing).
     // Only pass products visible on this day — products added later must
     // not appear in past day entries.
     final dayProducts = productsForDay(_dateStr(date));
@@ -154,22 +199,22 @@ class AppProvider extends ChangeNotifier {
     }
 
     // Reset all pending state
-    _pendingPurchaseQty   = {};
+    _pendingPurchaseQty = {};
     _pendingPurchasePrice = {};
-    _pendingSellPrice     = {};
-    _pendingSalesQty      = {};
+    _pendingSellPrice = {};
+    _pendingSalesQty = {};
 
     // Seed every product visible on this day with default prices and zero qty.
     for (final p in dayProducts) {
       _pendingPurchasePrice[p.firestoreId!] = p.buyPrice;
-      _pendingSellPrice[p.firestoreId!]     = p.sellPrice;
-      _pendingPurchaseQty[p.firestoreId!]   = 0;
-      _pendingSalesQty[p.firestoreId!]      = 0;
+      _pendingSellPrice[p.firestoreId!] = p.sellPrice;
+      _pendingPurchaseQty[p.firestoreId!] = 0;
+      _pendingSalesQty[p.firestoreId!] = 0;
     }
 
     // Overwrite defaults with values already saved for this day
     for (final pur in _currentEntry!.purchases) {
-      _pendingPurchaseQty[pur.productId]   = pur.qty;
+      _pendingPurchaseQty[pur.productId] = pur.qty;
       _pendingPurchasePrice[pur.productId] = pur.price;
     }
     for (final s in _currentEntry!.sales) {
@@ -177,7 +222,6 @@ class AppProvider extends ChangeNotifier {
     }
 
     _pendingExpenses = List.from(_currentEntry!.expenses);
-
     notifyListeners();
   }
 
@@ -185,22 +229,22 @@ class AppProvider extends ChangeNotifier {
 
   void setPurchaseQty(String productId, int qty) {
     _pendingPurchaseQty[productId] = qty;
-    notifyListeners(); // available stock recalculates, summary preview updates
+    notifyListeners();
   }
 
   void setPurchasePrice(String productId, double price) {
     _pendingPurchasePrice[productId] = price;
-    notifyListeners(); // profit preview updates
+    notifyListeners();
   }
 
   void setSellPrice(String productId, double price) {
     _pendingSellPrice[productId] = price;
-    notifyListeners(); // revenue/profit totals update
+    notifyListeners();
   }
 
   void setSalesQty(String productId, int qty) {
     _pendingSalesQty[productId] = qty;
-    notifyListeners(); // running revenue total updates
+    notifyListeners();
   }
 
   // ── Expense management ────────────────────────────────────────────────────
@@ -248,14 +292,17 @@ class AppProvider extends ChangeNotifier {
 
     await FirestoreService.savePurchases(_currentEntry!.dateKey, items);
 
-    // If a buy price changed, update the product master record
-    for (final p in currentDayProducts) {
-      final qty = _pendingPurchaseQty[p.firestoreId] ?? 0;
-      if (qty > 0) {
-        final newPrice =
-            _pendingPurchasePrice[p.firestoreId] ?? p.buyPrice;
-        if (newPrice != p.buyPrice) {
-          await updateProduct(p.copyWith(buyPrice: newPrice));
+    // Only update master buy prices when editing today — not past days —
+    // to avoid corrupting the product master record from historical re-edits.
+    final todayStr = _dateStr(DateTime.now());
+    if (_currentEntry!.dateKey == todayStr) {
+      for (final p in currentDayProducts) {
+        final qty = _pendingPurchaseQty[p.firestoreId] ?? 0;
+        if (qty > 0) {
+          final newPrice = _pendingPurchasePrice[p.firestoreId] ?? p.buyPrice;
+          if (newPrice != p.buyPrice) {
+            await updateProduct(p.copyWith(buyPrice: newPrice));
+          }
         }
       }
     }
@@ -265,10 +312,14 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> saveSellPrices() async {
-    for (final p in currentDayProducts) {
-      final newPrice = _pendingSellPrice[p.firestoreId] ?? p.sellPrice;
-      if (newPrice != p.sellPrice) {
-        await updateProduct(p.copyWith(sellPrice: newPrice));
+    // Only update master sell prices when editing today — not past days.
+    final todayStr = _dateStr(DateTime.now());
+    if (_currentEntry!.dateKey == todayStr) {
+      for (final p in currentDayProducts) {
+        final newPrice = _pendingSellPrice[p.firestoreId] ?? p.sellPrice;
+        if (newPrice != p.sellPrice) {
+          await updateProduct(p.copyWith(sellPrice: newPrice));
+        }
       }
     }
     notifyListeners();
@@ -287,28 +338,42 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> completeDay() async {
-    final revenue         = dailyRevenue;
-    final profit          = dailyProfit;
-    final expenses        = totalDailyExpenses;
-    final netProfit       = profit - expenses;
-    final restockCost     = dailyRestockCost;
+    final revenue = dailyRevenue;
+    final profit = dailyProfit;
+    final expenses = totalDailyExpenses;
+    final netProfit = profit - expenses;
+    final restockCost = dailyRestockCost;
     final netAfterRestock = netProfit - restockCost;
 
-    // ── Compute closing stock for every active product ────────────────────
-    // closingStock = openingStock + purchased - sold   (clamped to 0)
-    // This map is stored on the Firestore day document and becomes the
-    // next day's openingStock directly — no re-derivation needed.
+    // ── Compute closing stock for every product visible on this day ───────
+    // closingStock = openingStock + purchased - sold  (clamped ≥ 0)
+    // Stored on the Firestore day document and cascaded forward as the
+    // next applicable day's openingStock.
     final closingStock = <String, int>{};
     for (final p in currentDayProducts) {
-      final opening  = getOpeningStock(p.firestoreId!);
-      final bought   = _pendingPurchaseQty[p.firestoreId] ?? 0;
-      final sold     = _pendingSalesQty[p.firestoreId] ?? 0;
-      closingStock[p.firestoreId!] = (opening + bought - sold).clamp(0, 99999);
+      final opening = getOpeningStock(p.firestoreId!);
+      final bought = _pendingPurchaseQty[p.firestoreId] ?? 0;
+      final sold = _pendingSalesQty[p.firestoreId] ?? 0;
+      closingStock[p.firestoreId!] =
+          (opening + bought - sold).clamp(0, 99999);
     }
 
     await FirestoreService.completeDayEntry(
-        _currentEntry!.dateKey, revenue, profit, expenses, netProfit,
-        restockCost, netAfterRestock, closingStock);
+      _currentEntry!.dateKey,
+      revenue,
+      profit,
+      expenses,
+      netProfit,
+      restockCost,
+      netAfterRestock,
+      closingStock,
+    );
+
+    // ── Cascade closing stock forward to all later day entries ────────────
+    // Mirrors SQLite cascadeOpeningStockForward — completing or re-completing
+    // a past day correctly updates all future days' opening stock.
+    await FirestoreService.cascadeOpeningStockForward(
+        _currentEntry!.dateKey, closingStock);
 
     _currentEntry = _currentEntry!.copyWith(
       complete: true,
@@ -320,6 +385,7 @@ class AppProvider extends ChangeNotifier {
       netProfitAfterRestock: netAfterRestock,
       closingStock: closingStock,
     );
+
     await loadMonthEntries(_focusedMonth);
     notifyListeners();
   }
@@ -335,12 +401,12 @@ class AppProvider extends ChangeNotifier {
     return opening + bought;
   }
 
-  /// Live closing stock = opening + bought - sold
-  /// Same formula used in completeDay() — shown in summary table
+  /// Live closing stock = opening + bought - sold.
+  /// Same formula used in completeDay() — shown in summary table.
   int getClosingStock(String productId) {
     final opening = getOpeningStock(productId);
-    final bought  = _pendingPurchaseQty[productId] ?? 0;
-    final sold    = _pendingSalesQty[productId] ?? 0;
+    final bought = _pendingPurchaseQty[productId] ?? 0;
+    final sold = _pendingSalesQty[productId] ?? 0;
     return (opening + bought - sold).clamp(0, 99999);
   }
 
@@ -370,8 +436,8 @@ class AppProvider extends ChangeNotifier {
 
   double get dailyNetProfit => dailyProfit - totalDailyExpenses;
 
-  /// Sum of (units bought today × buy price paid today) per product
-  /// This is the cash spent on goods/assets — the restock cost
+  /// Sum of (units bought today × buy price paid today) per product.
+  /// This is the cash spent restocking goods.
   double get dailyRestockCost {
     double total = 0;
     for (final p in currentDayProducts) {
@@ -382,7 +448,7 @@ class AppProvider extends ChangeNotifier {
     return total;
   }
 
-  /// Net profit minus what was spent restocking stock today
+  /// Net profit minus what was spent restocking stock today.
   double get dailyNetProfitAfterRestock => dailyNetProfit - dailyRestockCost;
 
   double get monthlyRevenue =>
@@ -393,10 +459,8 @@ class AppProvider extends ChangeNotifier {
       _monthEntries.fold(0, (s, e) => s + e.totalExpenses);
   double get monthlyNetProfit =>
       _monthEntries.fold(0, (s, e) => s + e.netProfit);
-
   double get monthlyRestockCost =>
       _monthEntries.fold(0.0, (s, e) => s + e.totalRestockCost);
-
   double get monthlyNetProfitAfterRestock =>
       _monthEntries.fold(0.0, (s, e) => s + e.netProfitAfterRestock);
 

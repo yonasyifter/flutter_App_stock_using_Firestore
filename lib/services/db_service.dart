@@ -59,6 +59,27 @@ class FirestoreService {
     await _products.doc(id).update({'active': false});
   }
 
+  // FIX: The original fetched only the single most-recent day and returned -1
+  // if that day had no entry for this product (e.g. a newly added product, or
+  // a day where the product wasn't traded). Now we scan backwards through up to
+  // 60 days until we find one that actually contains a closingStock entry for
+  // the given productId — which is the true "current" stock for that product.
+  static Future<int> getCurrentClosingStock(String productId) async {
+    final snap = await _dayEntries
+        .orderBy('date', descending: true)
+        .limit(60)
+        .get();
+
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final closing = _toIntMap(data['closingStock']);
+      if (closing.containsKey(productId)) {
+        return closing[productId]!;
+      }
+    }
+    return -1; // No history — caller falls back to product.openingStock
+  }
+
   // ── Patch a single product's opening stock on an open day entry ───────────
   // Called when the user edits a product's openingStock from the product list.
   // Updates both openingStock and closingStock on the day document so the
@@ -74,14 +95,9 @@ class FirestoreService {
     final closing = Map<String, dynamic>.from(
         (data['closingStock'] as Map<String, dynamic>?) ?? {});
 
-    // Update today's opening stock to reflect the manual correction.
-    // This is what getOpeningStock() reads, so the purchase screen
-    // shows the corrected value immediately.
     opening[productId] = newOpeningStock;
 
     // Recompute closing stock using the CORRECTED opening:
-    //   closing = newOpeningStock + purchased_today - sold_today
-    // This ensures tomorrow's openingStock carries the correct value.
     final purSnap  = await _purchases(dateStr).doc(productId).get();
     final saleSnap = await _sales(dateStr).doc(productId).get();
 
@@ -92,7 +108,6 @@ class FirestoreService {
         ? ((saleSnap.data() as Map<String, dynamic>)['qtySold'] as num).toInt()
         : 0;
 
-    // closing = corrected opening + what was bought today - what was sold today
     closing[productId] = (newOpeningStock + purchased - sold).clamp(0, 99999);
 
     await _dayEntries.doc(dateStr).update({
@@ -125,44 +140,25 @@ class FirestoreService {
         .copyWith(purchases: purchases, sales: sales, expenses: expenses);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // getOrCreateDayEntry
-  //
-  // Called every time the user taps a day on the calendar — whether the day
-  // is new, in-progress, or already completed (client can always re-edit).
-  //
-  // What it does:
-  //   • If the day document does NOT exist → create it with correct openingStock
-  //   • If it DOES exist → return it as-is, patching any newly added products
-  //
-  // openingStock for a new day comes from:
-  //   → The most recent previous day's closingStock  (complete OR incomplete)
-  //   → Fallback: the product's declared openingStock (first-ever day only)
-  // ─────────────────────────────────────────────────────────────────────────
   static Future<DayEntry> getOrCreateDayEntry(
       DateTime date, List<Product> products) async {
 
     final dateStr = _dateStr(date);
-
-    // ── Get the previous day's closing stock (source of today's opening) ────
     final prevClosing = await _getPreviousClosingStock(dateStr);
 
-    // Build openingStock map for a brand-new day
     Map<String, int> buildOpening() {
       final map = <String, int>{};
       for (final p in products) {
         map[p.firestoreId!] = prevClosing.containsKey(p.firestoreId)
             ? prevClosing[p.firestoreId!]!
-            : p.openingStock; // first-ever day for this product
+            : p.openingStock;
       }
       return map;
     }
 
-    // ── Does today's document already exist? ─────────────────────────────────
     final existingSnap = await _dayEntries.doc(dateStr).get();
 
     if (!existingSnap.exists) {
-      // Brand-new day — create document
       final opening = buildOpening();
       await _dayEntries.doc(dateStr).set({
         'date': dateStr,
@@ -174,7 +170,7 @@ class FirestoreService {
         'totalRestockCost': 0.0,
         'netProfitAfterRestock': 0.0,
         'openingStock': opening,
-        'closingStock': opening, // initially equal to opening; updated on completeDay
+        'closingStock': opening,
       });
       return DayEntry(
         firestoreId: dateStr,
@@ -184,55 +180,33 @@ class FirestoreService {
       );
     }
 
-    // ── Document exists ──────────────────────────────────────────────────────
     final data = existingSnap.data() as Map<String, dynamic>;
     final storedOpening = _toIntMap(data['openingStock']);
-    final storedClosing = _toIntMap(data['closingStock']);
 
-    // Check for products added AFTER this day was first opened
     final missingProducts = products
         .where((p) => !storedOpening.containsKey(p.firestoreId))
         .toList();
 
+    // FIX: Removed the "allZero" heuristic that was here previously.
+    // It checked storedOpening.values.every((v) => v == 0) and overwrote ALL
+    // opening stock values with prevClosing. This silently corrupted any day
+    // where products genuinely had zero stock (new shop, sold-out items, etc.).
+    // The stored values are authoritative — only patch entries that are missing.
     if (missingProducts.isEmpty) {
-      // Check if all stored opening values are 0 — this means the day was
-      // created before products had stock values (corrupted state). Fix it.
-      final allZero = storedOpening.isNotEmpty &&
-          storedOpening.values.every((v) => v == 0) &&
-          prevClosing.isNotEmpty;
-
-      if (allZero) {
-        // Recompute opening from prevClosing
-        final recomputedOpening = <String, int>{};
-        for (final p in products) {
-          recomputedOpening[p.firestoreId!] = prevClosing.containsKey(p.firestoreId)
-              ? prevClosing[p.firestoreId!]!
-              : p.openingStock;
-        }
-        await _dayEntries.doc(dateStr).update({
-          'openingStock': recomputedOpening,
-          'closingStock': recomputedOpening,
-        });
-        final freshSnap = await _dayEntries.doc(dateStr).get();
-        return _hydrate(freshSnap);
-      }
-
       return _hydrate(existingSnap);
     }
 
-    // Patch both openingStock and closingStock for newly added products
+    // Patch only products that are missing from this day's opening stock
+    // (products added after this day was first created).
     final patchOpening = <String, int>{};
-    final patchClosing = <String, int>{};
     for (final p in missingProducts) {
-      final value = prevClosing.containsKey(p.firestoreId)
+      patchOpening[p.firestoreId!] = prevClosing.containsKey(p.firestoreId)
           ? prevClosing[p.firestoreId!]!
           : p.openingStock;
-      patchOpening[p.firestoreId!] = value;
-      patchClosing[p.firestoreId!] = value;
     }
 
     final updatedOpening = {...storedOpening, ...patchOpening};
-    final updatedClosing = {...storedClosing, ...patchClosing};
+    final updatedClosing = {..._toIntMap(data['closingStock']), ...patchOpening};
 
     await _dayEntries.doc(dateStr).update({
       'openingStock': updatedOpening,
@@ -243,11 +217,6 @@ class FirestoreService {
     return _hydrate(freshSnap);
   }
 
-  // ── Get the closing stock from the most recent day before dateStr ─────────
-  //
-  // Looks at ANY previous day (complete or not) because the client
-  // can re-open and edit completed days. The closingStock field is
-  // always updated by completeDay(), so it always reflects the latest save.
   static Future<Map<String, int>> _getPreviousClosingStock(String dateStr) async {
     final snap = await _dayEntries
         .where('date', isLessThan: dateStr)
@@ -307,11 +276,6 @@ class FirestoreService {
   }
 
   // ── COMPLETE DAY ─────────────────────────────────
-  //
-  // Always rewrites closingStock = opening + purchased - sold.
-  // This works for first-time completion AND re-completion after editing.
-  // The complete flag is set to true; it can be opened again any time —
-  // the next completeDay() call will update everything with fresh numbers.
 
   static Future<void> completeDayEntry(
     String dateStr,
@@ -331,13 +295,74 @@ class FirestoreService {
       'netProfit': netProfit,
       'totalRestockCost': restockCost,
       'netProfitAfterRestock': netAfterRestock,
-      'closingStock': closingStock, // always fresh, always correct
+      'closingStock': closingStock,
     });
   }
 
-  // ── REOPEN A COMPLETED DAY ───────────────────────
-  // Resets complete flag to false so the day can be edited again.
-  // closingStock is NOT touched here — it will be rewritten by completeDay().
+  // FIX 1: Added .clamp(0, 99999) when computing updatedCl. The original code
+  //        did not clamp, so propagating a stock decrease could produce a
+  //        negative closingStock value on downstream days.
+  // FIX 2: Replaced the single WriteBatch with chunked batches capped at 499
+  //        operations each. Firestore enforces a hard 500-op limit per batch;
+  //        the old code would throw and silently drop the entire cascade for
+  //        any user with more than ~499 future day entries.
+  static Future<void> cascadeOpeningStockForward(
+      String startDateStr, Map<String, int> closingStock) async {
+    final snap = await _dayEntries
+        .where('date', isGreaterThan: startDateStr)
+        .orderBy('date')
+        .get();
+
+    if (snap.docs.isEmpty) return;
+
+    var currentClosing = Map<String, int>.from(closingStock);
+
+    const int _chunkSize = 499;
+    WriteBatch batch = _db.batch();
+    int opsInBatch = 0;
+
+    for (final doc in snap.docs) {
+      final d = doc.data() as Map<String, dynamic>;
+      final op = _toIntMap(d['openingStock']);
+      final cl = _toIntMap(d['closingStock']);
+
+      final updatedOp = {...op};
+      final updatedCl = {...cl};
+
+      bool changed = false;
+      for (final entry in currentClosing.entries) {
+        final pid = entry.key;
+        final prevCl = entry.value;
+
+        if (updatedOp[pid] != prevCl) {
+          final diff = prevCl - (updatedOp[pid] ?? 0);
+          updatedOp[pid] = prevCl;
+          updatedCl[pid] = ((updatedCl[pid] ?? 0) + diff).clamp(0, 99999);
+          changed = true;
+        }
+      }
+
+      // Always advance the chain regardless of whether this doc changed
+      currentClosing = updatedCl;
+
+      if (changed) {
+        batch.update(doc.reference, {
+          'openingStock': updatedOp,
+          'closingStock': updatedCl,
+        });
+        opsInBatch++;
+
+        if (opsInBatch >= _chunkSize) {
+          await batch.commit();
+          batch = _db.batch();
+          opsInBatch = 0;
+        }
+      }
+    }
+
+    if (opsInBatch > 0) await batch.commit();
+  }
+
   static Future<void> reopenDay(String dateStr) async {
     await _dayEntries.doc(dateStr).update({'complete': false});
   }
@@ -352,6 +377,18 @@ class FirestoreService {
         .where('date', isLessThanOrEqualTo: to)
         .get();
     return snap.docs.map((d) => DayEntry.fromFirestore(d)).toList();
+  }
+
+  static Future<List<DayEntry>> getFullMonthEntries(int year, int month) async {
+    final from = '$year-${month.toString().padLeft(2, '0')}-01';
+    final to   = '$year-${month.toString().padLeft(2, '0')}-31';
+    final snap = await _dayEntries
+        .where('date', isGreaterThanOrEqualTo: from)
+        .where('date', isLessThanOrEqualTo: to)
+        .get();
+
+    final futures = snap.docs.map((d) => _hydrate(d));
+    return Future.wait(futures);
   }
 
   static String _dateStr(DateTime date) =>

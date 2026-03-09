@@ -340,6 +340,10 @@ class _AddProductSheetState extends State<_AddProductSheet> {
       buyPrice: double.parse(_buyCtrl.text),
       sellPrice: double.parse(_sellCtrl.text),
       openingStock: int.tryParse(_stockCtrl.text) ?? 0,
+      // FIX: Preserve the original createdAt when editing an existing product.
+      // Without this, editing any product resets createdAt to today, which
+      // breaks visibleOnDay() and hides the product from all past day entries.
+      createdAt: widget.existing?.createdAt,
     );
     if (widget.existing != null) {
       provider.updateProduct(product);

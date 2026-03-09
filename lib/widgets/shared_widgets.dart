@@ -61,24 +61,57 @@ class ScreenHeader extends StatelessWidget {
   }
 }
 
-class CurrencyField extends StatelessWidget {
+// FIX: Was a StatelessWidget that created a TextEditingController inside
+// build() — leaked on every rebuild because it was never disposed. Converted
+// to StatefulWidget so the controller is created once and properly disposed.
+class CurrencyField extends StatefulWidget {
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
   const CurrencyField({super.key, required this.label, required this.value, required this.onChanged});
   @override
+  State<CurrencyField> createState() => _CurrencyFieldState();
+}
+
+class _CurrencyFieldState extends State<CurrencyField> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value.toStringAsFixed(2));
+  }
+
+  @override
+  void didUpdateWidget(CurrencyField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync external value changes without disturbing the cursor position
+    if (oldWidget.value != widget.value) {
+      final newText = widget.value.toStringAsFixed(2);
+      if (_controller.text != newText) {
+        _controller.text = newText;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = TextEditingController(text: value.toStringAsFixed(2));
     return TextFormField(
-      controller: controller,
+      controller: _controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       style: AppTheme.sansAmharic(fontSize: 15),
       decoration: InputDecoration(
-        labelText: label,
+        labelText: widget.label,
         prefixText: 'ብር ',
         prefixStyle: AppTheme.sansAmharic(color: AppTheme.brown, fontSize: 14),
       ),
-      onChanged: (v) => onChanged(double.tryParse(v) ?? value),
+      onChanged: (v) => widget.onChanged(double.tryParse(v) ?? widget.value),
     );
   }
 }
