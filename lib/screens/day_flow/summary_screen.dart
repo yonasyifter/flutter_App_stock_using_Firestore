@@ -372,15 +372,15 @@ class SummaryScreen extends StatelessWidget {
                               children: [
                                 Text(s.netAfterRestock,
                                     style: AppTheme.serifAmharic(
-                                        fontSize: 14,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: AppTheme.amberLight)),
                                 Text(
                                     formatCurrency(
                                         provider.dailyNetProfitAfterRestock),
                                     style: AppTheme.serifAmharic(
-                                        fontSize: 26,
-                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
                                         color: provider
                                                     .dailyNetProfitAfterRestock >=
                                                 0

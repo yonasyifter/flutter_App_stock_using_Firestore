@@ -101,8 +101,10 @@ class PurchasesScreen extends StatelessWidget {
             ])),
             BottomActionBar(label: s.saveAndContinue, onPressed: () async {
               await provider.savePurchases();
-              if (context.mounted) Navigator.push(context,
+              if (context.mounted) {
+                Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const PriceCheckScreen()));
+              }
             }),
           ]);
         }),

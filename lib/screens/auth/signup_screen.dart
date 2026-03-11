@@ -126,10 +126,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   style: AppTheme.sansAmharic(fontSize: 15),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: 'you@email.com',
                     prefixIcon:
-                        const Icon(Icons.email_outlined, color: AppTheme.brown, size: 20),
+                        Icon(Icons.email_outlined, color: AppTheme.brown, size: 20),
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {

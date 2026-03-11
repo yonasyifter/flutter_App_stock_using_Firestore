@@ -6,8 +6,24 @@ import '../providers/language_provider.dart';
 import '../theme.dart';
 import '../widgets/shared_widgets.dart';
 
-class ProductSetupScreen extends StatelessWidget {
+class ProductSetupScreen extends StatefulWidget {
   const ProductSetupScreen({super.key});
+
+  @override
+  State<ProductSetupScreen> createState() => _ProductSetupScreenState();
+}
+
+class _ProductSetupScreenState extends State<ProductSetupScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch latest closing stock levels for all products
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AppProvider>().loadClosingStockCache();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +118,7 @@ class _ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<LanguageProvider>();
+    final provider = context.watch<AppProvider>();
     final s = lang.s;
 
     return Card(
@@ -124,7 +141,7 @@ class _ProductTile extends StatelessWidget {
                         AppTheme.sansAmharic(fontSize: 12, color: AppTheme.brown),
                   ),
                   Text(
-                    s.openingStockLabel(product.openingStock),
+                    s.openingStockLabel(provider.getProductCurrentStock(product.firestoreId!)),
                     style:
                         AppTheme.sansAmharic(fontSize: 12, color: AppTheme.brown),
                   ),

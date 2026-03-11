@@ -133,9 +133,9 @@ class FirestoreService {
       _sales(dateStr).get(),
       _expenses(dateStr).get(),
     ]);
-    final purchases = (results[0] as QuerySnapshot).docs.map((d) => PurchaseItem.fromFirestore(d)).toList();
-    final sales     = (results[1] as QuerySnapshot).docs.map((d) => SaleItem.fromFirestore(d)).toList();
-    final expenses  = (results[2] as QuerySnapshot).docs.map((d) => HouseholdExpense.fromFirestore(d)).toList();
+    final purchases = (results[0]).docs.map((d) => PurchaseItem.fromFirestore(d)).toList();
+    final sales     = (results[1]).docs.map((d) => SaleItem.fromFirestore(d)).toList();
+    final expenses  = (results[2]).docs.map((d) => HouseholdExpense.fromFirestore(d)).toList();
     return DayEntry.fromFirestore(snap)
         .copyWith(purchases: purchases, sales: sales, expenses: expenses);
   }
@@ -241,7 +241,9 @@ class FirestoreService {
   static Future<void> savePurchases(String dateStr, List<PurchaseItem> items) async {
     final batch = _db.batch();
     final existing = await _purchases(dateStr).get();
-    for (final d in existing.docs) batch.delete(d.reference);
+    for (final d in existing.docs) {
+      batch.delete(d.reference);
+    }
     for (final item in items) {
       batch.set(_purchases(dateStr).doc(item.productId), item.toFirestore());
     }
@@ -253,7 +255,9 @@ class FirestoreService {
   static Future<void> saveSales(String dateStr, List<SaleItem> items) async {
     final batch = _db.batch();
     final existing = await _sales(dateStr).get();
-    for (final d in existing.docs) batch.delete(d.reference);
+    for (final d in existing.docs) {
+      batch.delete(d.reference);
+    }
     for (final item in items) {
       batch.set(_sales(dateStr).doc(item.productId), item.toFirestore());
     }
@@ -265,7 +269,9 @@ class FirestoreService {
   static Future<void> replaceExpenses(String dateStr, List<HouseholdExpense> items) async {
     final batch = _db.batch();
     final existing = await _expenses(dateStr).get();
-    for (final d in existing.docs) batch.delete(d.reference);
+    for (final d in existing.docs) {
+      batch.delete(d.reference);
+    }
     for (final item in items) {
       final ref = item.firestoreId != null
           ? _expenses(dateStr).doc(item.firestoreId)
@@ -317,7 +323,7 @@ class FirestoreService {
 
     var currentClosing = Map<String, int>.from(closingStock);
 
-    const int _chunkSize = 499;
+    const int chunkSize = 499;
     WriteBatch batch = _db.batch();
     int opsInBatch = 0;
 
@@ -352,7 +358,7 @@ class FirestoreService {
         });
         opsInBatch++;
 
-        if (opsInBatch >= _chunkSize) {
+        if (opsInBatch >= chunkSize) {
           await batch.commit();
           batch = _db.batch();
           opsInBatch = 0;

@@ -15,8 +15,9 @@ class StepIndicator extends StatelessWidget {
       child: Row(
         children: List.generate(totalSteps, (i) {
           Color color;
-          if (i < currentStep - 1) color = AppTheme.greenLight;
-          else if (i == currentStep - 1) color = AppTheme.amber;
+          if (i < currentStep - 1) {
+            color = AppTheme.greenLight;
+          } else if (i == currentStep - 1) color = AppTheme.amber;
           else color = AppTheme.rule;
           return Expanded(
             child: Container(

@@ -7,7 +7,6 @@ import '../providers/app_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/language_provider.dart';
 import '../theme.dart';
-import '../widgets/shared_widgets.dart';
 import 'product_setup_screen.dart';
 import 'day_flow/purchases_screen.dart';
 
@@ -56,13 +55,15 @@ class _HomeScreenState extends State<HomeScreen> {
         day.day == yesterday.day;
   }
 
+  /// Today AND yesterday are always freely accessible — no lock, no countdown.
   bool _isAllowedDay(DateTime day) => _isToday(day) || _isYesterday(day);
 
+  /// A day temporarily unlocked (after 10-second countdown) stays open for 5 minutes.
   bool _isUnlocked(DateTime day) =>
       _unlockedDay != null &&
-          day.year == _unlockedDay!.year &&
-          day.month == _unlockedDay!.month &&
-          day.day == _unlockedDay!.day;
+      day.year == _unlockedDay!.year &&
+      day.month == _unlockedDay!.month &&
+      day.day == _unlockedDay!.day;
 
   bool _isFuture(DateTime day) => day.isAfter(DateTime.now());
 
@@ -156,7 +157,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleDayTap(
       BuildContext context, AppProvider provider, DateTime day) {
-    if (!provider.hasProductsOnDay(day)) return;
+    // Today and yesterday: open directly — no restriction at all
+    // Any other day (older past or future): warn then require 10-second countdown
     if (_isAllowedDay(day) || _isUnlocked(day)) {
       _openDay(context, provider, day);
     } else {
@@ -193,7 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.push(context,
+                Navigator.push(
+                    context,
                     MaterialPageRoute(
                         builder: (_) => const ProductSetupScreen()));
               },
@@ -207,8 +210,8 @@ class _HomeScreenState extends State<HomeScreen> {
             OutlinedButton(
               onPressed: () => Navigator.pop(context),
               child: Text(s.doLater,
-                  style:
-                  AppTheme.sansAmharic(fontSize: 15, color: AppTheme.ink)),
+                  style: AppTheme.sansAmharic(
+                      fontSize: 15, color: AppTheme.ink)),
             ),
             SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
           ],
@@ -268,6 +271,47 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ── Logout ─────────────────────────────────────────────────────────────────
+
+  void _logout(LanguageProvider lang) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.paper,
+        title: Text(
+            lang.isAmharic ? 'ይወጡ?' : 'Sign out?',
+            style: AppTheme.serifAmharic(fontSize: 20)),
+        content: Text(
+          lang.isAmharic
+              ? 'ዳታዎ ተቀምጧል። ማንኛውም ጊዜ ሊመለሱ ይችላሉ።'
+              : 'Your data is saved. You can sign back in anytime.',
+          style: AppTheme.sansAmharic(fontSize: 13, color: AppTheme.brown),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+                lang.isAmharic ? 'ሰርዝ' : 'Cancel',
+                style: AppTheme.sansAmharic(
+                    fontSize: 14, color: AppTheme.brown)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await context.read<AuthProvider>().signOut();
+            },
+            child: Text(
+                lang.isAmharic ? 'ውጣ' : 'Sign Out',
+                style: AppTheme.sansAmharic(
+                    fontSize: 14,
+                    color: AppTheme.red,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -278,6 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final s = lang.s;
           return CustomScrollView(
             slivers: [
+
               // ── App Bar ──────────────────────────────────────────────────
               SliverAppBar(
                 pinned: true,
@@ -301,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       margin: const EdgeInsets.symmetric(
                           vertical: 10, horizontal: 4),
                       padding:
-                      const EdgeInsets.symmetric(horizontal: 10),
+                          const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
                         border: Border.all(
                             color: AppTheme.amberLight.withOpacity(0.6)),
@@ -325,107 +370,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.inventory_2_outlined),
+                    icon: const Icon(Icons.local_grocery_store_sharp),
                     tooltip: s.manageProducts,
                     onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ProductSetupScreen()))
-                        .then((_) =>
-                        provider.loadMonthEntries(_focusedDay)),
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const ProductSetupScreen()))
+                        .then((_) => provider.loadMonthEntries(_focusedDay)),
                   ),
-                  // Account popup menu (Firebase Auth — kept from Firebase version)
+                  // Firebase sign-out via AuthProvider
                   Consumer<AuthProvider>(
-                    builder: (ctx, auth, _) =>
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.account_circle_outlined,
-                              color: AppTheme.amberLight),
-                          color: AppTheme.paper,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                              enabled: false,
-                              child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                        lang.isAmharic
-                                            ? 'የተገባው'
-                                            : 'Signed in as',
-                                        style: AppTheme.sansAmharic(
-                                            fontSize: 11,
-                                            color: AppTheme.brown)),
-                                    const SizedBox(height: 2),
-                                    Text(auth.email ?? '',
-                                        style: AppTheme.sansAmharic(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600)),
-                                    const Divider(height: 16),
-                                  ]),
-                            ),
-                            PopupMenuItem(
-                              value: 'logout',
-                              child: Row(children: [
-                                const Icon(Icons.logout,
-                                    size: 18, color: AppTheme.red),
-                                const SizedBox(width: 10),
-                                Text(
-                                    lang.isAmharic ? 'ውጣ' : 'Sign Out',
-                                    style: AppTheme.sansAmharic(
-                                        fontSize: 14,
-                                        color: AppTheme.red)),
-                              ]),
-                            ),
-                          ],
-                          onSelected: (val) async {
-                            if (val == 'logout') {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (dCtx) => AlertDialog(
-                                  backgroundColor: AppTheme.paper,
-                                  title: Text(
-                                      lang.isAmharic ? 'ይወጡ?' : 'Sign out?',
-                                      style: AppTheme.serifAmharic(
-                                          fontSize: 20)),
-                                  content: Text(
-                                    lang.isAmharic
-                                        ? 'ዳታዎ ተቀምጧል። ማንኛውም ጊዜ ሊመለሱ ይችላሉ።'
-                                        : 'Your data is saved. You can sign back in anytime.',
-                                    style: AppTheme.sansAmharic(
-                                        fontSize: 13,
-                                        color: AppTheme.brown),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(dCtx, false),
-                                      child: Text(
-                                          lang.isAmharic ? 'ሰርዝ' : 'Cancel',
-                                          style: AppTheme.sansAmharic(
-                                              fontSize: 14,
-                                              color: AppTheme.brown)),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(dCtx, true),
-                                      child: Text(
-                                          lang.isAmharic ? 'ውጣ' : 'Sign Out',
-                                          style: AppTheme.sansAmharic(
-                                              fontSize: 14,
-                                              color: AppTheme.red,
-                                              fontWeight: FontWeight.w700)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirm == true && ctx.mounted) {
-                                await ctx.read<AuthProvider>().signOut();
-                              }
-                            }
-                          },
-                        ),
+                    builder: (ctx, auth, _) => IconButton(
+                      icon: const Icon(Icons.logout_rounded,
+                          color: AppTheme.amberLight),
+                      tooltip: lang.isAmharic ? 'ውጣ' : 'Sign Out',
+                      onPressed: () => _logout(lang),
+                    ),
                   ),
                 ],
               ),
@@ -448,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     rightChevronIcon: const Icon(Icons.chevron_right,
                         color: AppTheme.brown),
                     headerPadding:
-                    const EdgeInsets.symmetric(vertical: 12),
+                        const EdgeInsets.symmetric(vertical: 12),
                   ),
                   daysOfWeekStyle: DaysOfWeekStyle(
                     weekdayStyle: AppTheme.sansAmharic(
@@ -461,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     weekendTextStyle: AppTheme.sansAmharic(fontSize: 14),
                     todayDecoration: BoxDecoration(
                       border:
-                      Border.all(color: AppTheme.amber, width: 2),
+                          Border.all(color: AppTheme.amber, width: 2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     todayTextStyle: AppTheme.sansAmharic(
@@ -473,26 +433,46 @@ class _HomeScreenState extends State<HomeScreen> {
                     outsideDaysVisible: false,
                   ),
                   calendarBuilders: CalendarBuilders(
+                    // ── Dedicated builder for yesterday ───────────────────
                     defaultBuilder: (ctx, day, _) {
-                      final hasProducts = provider.hasProductsOnDay(day);
                       final entry = provider.getEntryForDay(day.day);
                       final isRestricted =
                           !_isAllowedDay(day) && !_isUnlocked(day);
 
-                      // ── No products exist for this day ─────────────────
-                      if (!hasProducts) {
+                      // ── Yesterday — always distinct purple style ────────
+                      if (_isYesterday(day)) {
+                        const yesterdayColor = Color(0xFF7C3AED); // vivid violet
+                        const yesterdayBg   = Color(0xFFF3EEFF);
                         return Container(
                           margin: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF0EDE8),
+                            color: yesterdayBg,
                             borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: yesterdayColor, width: 2),
                           ),
                           child: Center(
-                            child: Text('${day.day}',
-                                style: AppTheme.sansAmharic(
-                                    fontSize: 13,
-                                    color: AppTheme.brown
-                                        .withOpacity(0.35))),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('${day.day}',
+                                    style: AppTheme.sansAmharic(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: yesterdayColor)),
+                                Text(
+                                  entry == null
+                                      ? '–'
+                                      : entry.complete
+                                          ? '✓'
+                                          : '…',
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: yesterdayColor,
+                                      height: 1.2),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }
@@ -516,8 +496,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                             .withOpacity(0.3))),
                                 Icon(Icons.lock_outline_rounded,
                                     size: 8,
-                                    color:
-                                    AppTheme.brown.withOpacity(0.25)),
+                                    color: AppTheme.brown
+                                        .withOpacity(0.25)),
                               ],
                             ),
                           ),
@@ -546,14 +526,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Icon(Icons.lock_open_rounded,
                                     size: 8,
                                     color:
-                                    AppTheme.red.withOpacity(0.7)),
+                                        AppTheme.red.withOpacity(0.7)),
                               ],
                             ),
                           ),
                         );
                       }
 
-                      // ── Has products but no entry yet ──────────────────
+                      // ── Allowed day with no entry yet ──────────────────
                       if (entry == null) return null;
 
                       // ── Entry exists: green = complete, red = in-progress
@@ -574,8 +554,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text('${day.day}',
-                                  style:
-                                  AppTheme.sansAmharic(fontSize: 13)),
+                                  style: AppTheme.sansAmharic(
+                                      fontSize: 13)),
                               Text(entry.complete ? '✓' : '…',
                                   style: TextStyle(
                                       fontSize: 10,
@@ -629,29 +609,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                             child: _SummaryItem(
                                 label: s.totalRevenue,
-                                value: formatCurrency(
+                                value: s.formatCurrency(
                                     provider.monthlyRevenue))),
                         const SizedBox(width: 12),
                         Expanded(
                             child: _SummaryItem(
                                 label: s.netProfit,
-                                value: formatCurrency(
+                                value: s.formatCurrency(
                                     provider.monthlyNetProfit))),
-                      ]),
-                      const SizedBox(height: 12),
-                      Row(children: [
-                        Expanded(
-                            child: _SummaryItem(
-                                label: s.expensesLabel,
-                                value: formatCurrency(
-                                    provider.monthlyExpenses))),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: _SummaryItem(
-                                label: s.monthlyRestockCost,
-                                value: formatCurrency(
-                                    provider.monthlyRestockCost),
-                                valueColor: AppTheme.red)),
                       ]),
                       const SizedBox(height: 12),
                       Row(children: [
@@ -662,36 +627,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                             child: _SummaryItem(
-                                label: s.monthlyNetAfterRestock,
-                                value: formatCurrency(provider
-                                    .monthlyNetProfitAfterRestock),
-                                valueColor:
-                                provider.monthlyNetProfitAfterRestock >=
-                                    0
-                                    ? AppTheme.greenLight
-                                    : AppTheme.red)),
+                                label: s.expensesLabel,
+                                value: s.formatCurrency(
+                                    provider.monthlyExpenses))),
                       ]),
                     ]),
                   ),
                 ),
               ),
 
-              // ── Yesterday's daily summary ─────────────────────────────
+              // ── Yesterday's daily summary (always visible) ────────
               Builder(builder: (_) {
                 final yesterday =
-                DateTime.now().subtract(const Duration(days: 1));
-                // Use fullMonthEntries which includes purchases/sales/openingStock
+                    DateTime.now().subtract(const Duration(days: 1));
                 final yesterdayEntry = provider.fullMonthEntries
                     .where((e) =>
-                e.date.year == yesterday.year &&
-                    e.date.month == yesterday.month &&
-                    e.date.day == yesterday.day)
+                        e.date.year == yesterday.year &&
+                        e.date.month == yesterday.month &&
+                        e.date.day == yesterday.day)
                     .firstOrNull;
-
-                if (yesterdayEntry == null || !yesterdayEntry.complete) {
-                  return const SliverToBoxAdapter(
-                      child: SizedBox.shrink());
-                }
 
                 return SliverToBoxAdapter(
                   child: Padding(
@@ -706,93 +660,134 @@ class _HomeScreenState extends State<HomeScreen> {
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700)),
                           const Spacer(),
-                          Text(
-                            DateFormat('MMM d').format(yesterday),
-                            style: AppTheme.sansAmharic(
-                                fontSize: 12, color: AppTheme.brown),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3EEFF),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: const Color(0xFF7C3AED)
+                                      .withOpacity(0.4)),
+                            ),
+                            child: Text(
+                              DateFormat('MMM d').format(yesterday),
+                              style: AppTheme.sansAmharic(
+                                  fontSize: 11,
+                                  color: const Color(0xFF7C3AED),
+                                  fontWeight: FontWeight.w600),
+                            ),
                           ),
                         ]),
                         const SizedBox(height: 10),
 
+                        // No data yet placeholder
+                        if (yesterdayEntry == null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 28),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3EEFF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: const Color(0xFF7C3AED)
+                                      .withOpacity(0.2)),
+                            ),
+                            child: Column(children: [
+                              Icon(Icons.inventory_2_outlined,
+                                  size: 32,
+                                  color: const Color(0xFF7C3AED)
+                                      .withOpacity(0.4)),
+                              const SizedBox(height: 8),
+                              Text(
+                                lang.isAmharic
+                                    ? 'ትናንት ምንም ሪከርድ የለም'
+                                    : 'No data recorded for yesterday',
+                                style: AppTheme.sansAmharic(
+                                    fontSize: 13,
+                                    color: const Color(0xFF7C3AED)
+                                        .withOpacity(0.6)),
+                              ),
+                            ]),
+                          ),
+
                         // Stock table
-                        Card(
-                          margin: const EdgeInsets.all(0),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                headingRowHeight: 34,
-                                dataRowMinHeight: 44,
-                                dataRowMaxHeight: 52,
-                                columnSpacing: 12,
-                                headingTextStyle: AppTheme.sansAmharic(
-                                    fontSize: 10,
-                                    color: AppTheme.brown,
-                                    letterSpacing: 0.5),
-                                dataTextStyle:
-                                AppTheme.sansAmharic(fontSize: 12),
-                                columns: [
-                                  DataColumn(
-                                      label: Text(s.colProduct)),
-                                  DataColumn(
-                                      label: Text(s.colOpen),
-                                      numeric: true),
-                                  DataColumn(
-                                      label: Text(s.colBought),
-                                      numeric: true),
-                                  DataColumn(
-                                      label: Text(s.colSold),
-                                      numeric: true),
-                                  DataColumn(
-                                      label: Text(s.colClose),
-                                      numeric: true),
-                                  DataColumn(
-                                      label: Text(s.colRevenue),
-                                      numeric: true),
-                                ],
-                                rows: provider.activeProducts.map((p) {
-                                  // Use firestoreId for Firebase version
-                                  final opening = yesterdayEntry
-                                      .openingStock[p.firestoreId] ??
-                                      0;
-                                  final bought = yesterdayEntry.purchases
-                                      .where((x) =>
-                                  x.productId == p.firestoreId)
-                                      .fold(0,
-                                          (sum, x) => sum + x.qty);
-                                  final sold = yesterdayEntry.sales
-                                      .where((x) =>
-                                  x.productId == p.firestoreId)
-                                      .fold(
-                                      0,
-                                          (sum, x) =>
-                                      sum + x.qtySold);
-                                  final closing =
-                                  (opening + bought - sold)
-                                      .clamp(0, 99999);
-                                  return DataRow(cells: [
-                                    DataCell(Text(p.name,
-                                        style: AppTheme.sansAmharic(
-                                            fontSize: 13,
-                                            fontWeight:
-                                            FontWeight.w600))),
-                                    DataCell(Text('$opening')),
-                                    DataCell(Text('+$bought')),
-                                    DataCell(Text('$sold')),
-                                    DataCell(Text('$closing',
-                                        style: TextStyle(
-                                            color: closing <= 3
-                                                ? AppTheme.red
-                                                : AppTheme.ink))),
-                                    DataCell(Text(formatCurrency(
-                                        sold * p.sellPrice))),
-                                  ]);
-                                }).toList(),
+                        if (yesterdayEntry != null)
+                          Card(
+                            margin: const EdgeInsets.all(0),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  headingRowHeight: 34,
+                                  dataRowMinHeight: 44,
+                                  dataRowMaxHeight: 52,
+                                  columnSpacing: 12,
+                                  headingTextStyle: AppTheme.sansAmharic(
+                                      fontSize: 10,
+                                      color: AppTheme.brown,
+                                      letterSpacing: 0.5),
+                                  dataTextStyle:
+                                      AppTheme.sansAmharic(fontSize: 12),
+                                  columns: [
+                                    DataColumn(
+                                        label: Text(s.colProduct)),
+                                    DataColumn(
+                                        label: Text(s.colOpen),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text(s.colBought),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text(s.colSold),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text(s.colClose),
+                                        numeric: true),
+                                    DataColumn(
+                                        label: Text(s.colRevenue),
+                                        numeric: true),
+                                  ],
+                                  rows: provider.activeProducts.map((p) {
+                                    final opening = yesterdayEntry
+                                            .openingStock[p.firestoreId] ??
+                                        0;
+                                    final bought = yesterdayEntry.purchases
+                                        .where((x) =>
+                                            x.productId == p.firestoreId)
+                                        .fold(0, (sum, x) => sum + x.qty);
+                                    final sold = yesterdayEntry.sales
+                                        .where((x) =>
+                                            x.productId == p.firestoreId)
+                                        .fold(0,
+                                            (sum, x) => sum + x.qtySold);
+                                    final closing =
+                                        (opening + bought - sold)
+                                            .clamp(0, 99999);
+                                    return DataRow(cells: [
+                                      DataCell(Text(p.name,
+                                          style: AppTheme.sansAmharic(
+                                              fontSize: 13,
+                                              fontWeight:
+                                                  FontWeight.w600))),
+                                      DataCell(Text('$opening')),
+                                      DataCell(Text('+$bought')),
+                                      DataCell(Text('$sold')),
+                                      DataCell(Text('$closing',
+                                          style: TextStyle(
+                                              color: closing <= 3
+                                                  ? AppTheme.red
+                                                  : AppTheme.ink))),
+                                      DataCell(Text(s.formatCurrency(
+                                          sold * p.sellPrice))),
+                                    ]);
+                                  }).toList(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
                         const SizedBox(height: 12),
                       ],
                     ),
@@ -810,7 +805,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openDay(
       BuildContext context, AppProvider provider, DateTime day) async {
-    if (!provider.hasProductsOnDay(day)) return;
     if (provider.activeProducts.isEmpty) {
       _showSetupModal();
       return;
@@ -818,9 +812,9 @@ class _HomeScreenState extends State<HomeScreen> {
     await provider.openDay(day);
     if (!mounted) return;
     Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => PurchasesScreen(date: day)))
+            context,
+            MaterialPageRoute(
+                builder: (_) => PurchasesScreen(date: day)))
         .then((_) => provider.loadMonthEntries(_focusedDay));
   }
 }
@@ -836,7 +830,7 @@ class _CountdownDialog extends StatefulWidget {
 }
 
 class _CountdownDialogState extends State<_CountdownDialog> {
-  static const int _totalSeconds = 30;
+  static const int _totalSeconds = 10;
   int _secondsLeft = _totalSeconds;
   Timer? _timer;
 
@@ -869,7 +863,7 @@ class _CountdownDialogState extends State<_CountdownDialog> {
     return AlertDialog(
       backgroundColor: AppTheme.paper,
       shape:
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(children: [
         const Icon(Icons.hourglass_top_rounded,
             color: AppTheme.amber, size: 22),
@@ -884,7 +878,7 @@ class _CountdownDialogState extends State<_CountdownDialog> {
           Text(
             'You are about to modify restricted data.\nPlease wait before proceeding.',
             style:
-            AppTheme.sansAmharic(fontSize: 13, color: AppTheme.brown),
+                AppTheme.sansAmharic(fontSize: 13, color: AppTheme.brown),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -924,8 +918,8 @@ class _CountdownDialogState extends State<_CountdownDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text('Cancel',
-              style:
-              AppTheme.sansAmharic(fontSize: 14, color: AppTheme.red)),
+              style: AppTheme.sansAmharic(
+                  fontSize: 14, color: AppTheme.red)),
         ),
       ],
     );
@@ -956,7 +950,7 @@ class _LangOption extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: selected ? AppTheme.ink : AppTheme.paper,
           borderRadius: BorderRadius.circular(12),
@@ -997,7 +991,7 @@ class _LangOption extends StatelessWidget {
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color:
-                        selected ? AppTheme.cream : AppTheme.ink)),
+                            selected ? AppTheme.cream : AppTheme.ink)),
                 Text(sublabel,
                     style: AppTheme.sansAmharic(
                         fontSize: 12,
@@ -1021,9 +1015,7 @@ class _LangOption extends StatelessWidget {
 class _SummaryItem extends StatelessWidget {
   final String label;
   final String value;
-  final Color? valueColor;
-  const _SummaryItem(
-      {required this.label, required this.value, this.valueColor});
+  const _SummaryItem({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1038,9 +1030,9 @@ class _SummaryItem extends StatelessWidget {
         const SizedBox(height: 4),
         Text(value,
             style: AppTheme.serifAmharic(
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: valueColor ?? AppTheme.cream)),
+                color: AppTheme.cream)),
       ],
     );
   }
